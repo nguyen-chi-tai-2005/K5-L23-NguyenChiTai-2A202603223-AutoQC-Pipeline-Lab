@@ -39,10 +39,10 @@ def decide(issues, image_stems, cfg, reviewed=frozenset()):
     elif ratio >= threshold:
         decision = "Hold"
         reasons = [f"{len(warn_images)}/{n_images} ảnh còn cảnh báo chưa duyệt "
-                   f"({ratio:.2%}) >= ngưỡng {threshold:.2%}"]
+                   f"({ratio:.4%}) >= ngưỡng {threshold:.2%}"]
     else:
         decision = "Release"
         reasons = [f"không còn lỗi bắt buộc; {len(warn_images)}/{n_images} ảnh còn cảnh báo "
-                   f"chưa duyệt ({ratio:.2%}), dưới ngưỡng {threshold:.2%}"]
+                   f"chưa duyệt ({ratio:.4%}), dưới ngưỡng {threshold:.2%}"]
     return dict(decision=decision, n_errors=n_errors, n_warn_images=len(warn_images),
                 n_images=n_images, warn_ratio=round(ratio, 4), reasons=reasons)
