@@ -27,13 +27,91 @@ Bẫy cần nghĩ tới (có test cho từng cái)
 
 Gợi ý: `yaml.safe_load / safe_dump`.
 """
-from collections import defaultdict  # noqa: F401
+from collections import defaultdict
 
-import yaml  # noqa: F401
+import yaml
 
-from ..common import ERROR, parse_yolo_line  # noqa: F401
+from ..common import ERROR, ROOT, parse_yolo_line
 
 
 def fix(ds, issues, cfg):
-    # TODO
-    raise NotImplementedError("autofix chưa làm")
+    # Chặn thao tác ghi lên dữ liệu gốc, kể cả khi gọi nhầm API trực tiếp.
+    source_dir = (ROOT / "data").resolve()
+    target_dir = ds.root.resolve()
+    if target_dir == source_dir or source_dir in target_dir.parents:
+        raise ValueError("autofix chỉ được sửa bản sao làm việc, không sửa thư mục dữ liệu gốc")
+
+    errors = [issue for issue in issues if issue.severity == ERROR]
+    fixes = []
+
+    def record(image, line, action, before, after):
+        fixes.append(dict(image=image, line=line, action=action, before=before, after=after))
+
+    # Loại ảnh trước: các lỗi dòng trên cùng ảnh không còn cần xử lý.
+    removed = {i.image for i in errors
+               if i.code.startswith("DUP_IMAGE_") or i.code in {"LEAK_TEST", "CORRUPT_IMAGE", "BAD_SIZE"}}
+    for stem in sorted(removed):
+        image_path = ds.image_path(stem)
+        label_path = ds.label_path(stem)
+        paths = [p for p in (image_path, label_path) if p is not None and p.exists()]
+        if paths:
+            before = "; ".join(p.name for p in paths)
+            for path in paths:
+                path.unlink()
+            record(stem, None, "remove_image", before, "(đã loại ảnh và nhãn)")
+
+    if any(i.code == "BAD_CLASS_NAME" for i in errors):
+        data = yaml.safe_load(ds.yaml_path.read_text(encoding="utf-8")) if ds.yaml_path.exists() else {}
+        data = data or {}
+        expected = dict(enumerate(cfg["classes"]))
+        if not ds.yaml_path.exists() or ds.yaml_names() != expected:
+            before = str(data.get("names"))
+            data["names"] = expected
+            ds.yaml_path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+            record("data.yaml", None, "rename_classes", before, str(expected))
+
+    for stem in sorted({i.image for i in errors if i.code == "MISSING_LABEL_FILE"} - removed):
+        if ds.image_path(stem) is not None and not ds.label_path(stem).exists():
+            record(stem, None, "needs_label", "(không có file)", "chuyển người gán")
+
+    drop_codes = {"BAD_FORMAT", "BAD_CLASS_ID", "BOX_ZERO", "DUP_BOX"}
+    by_file = defaultdict(lambda: defaultdict(set))
+    for issue in errors:
+        if issue.image not in removed and issue.line is not None and issue.code in drop_codes | {"BOX_OUT_OF_IMAGE"}:
+            by_file[issue.image][issue.line].add(issue.code)
+
+    for stem in sorted(by_file):
+        path = ds.label_path(stem)
+        if not path.exists():
+            continue
+        original = path.read_text(encoding="utf-8", errors="replace")
+        output = []
+        for line, raw_line in enumerate(original.splitlines(keepends=True), 1):
+            codes = by_file[stem].get(line, set())
+            before = raw_line.rstrip("\r\n")
+            if codes & drop_codes:
+                record(stem, line, "drop_line", before, "")
+                continue
+            if "BOX_OUT_OF_IMAGE" not in codes:
+                output.append(raw_line)
+                continue
+            try:
+                cls, x, y, w, h = parse_yolo_line(before)
+            except (ValueError, OverflowError):
+                record(stem, line, "drop_line", before, "")
+                continue
+            left, top = max(0.0, x - w / 2), max(0.0, y - h / 2)
+            right, bottom = min(1.0, x + w / 2), min(1.0, y + h / 2)
+            if right <= left or bottom <= top:
+                record(stem, line, "drop_line", before, "")
+                continue
+            after = str(cls) + " " + " ".join(f"{v:.12g}" for v in
+                                             ((left + right) / 2, (top + bottom) / 2,
+                                              right - left, bottom - top))
+            output.append(after + raw_line[len(before):])
+            if after != before:
+                record(stem, line, "clip_box", before, after)
+        updated = "".join(output)
+        if updated != original:
+            path.write_text(updated, encoding="utf-8")
+    return fixes
