@@ -7,3 +7,7 @@ __pycache__/
 *.pt
 runs/
 _instructor/solution/
+
+# Local project notes and supplementary checks
+/.cursor/
+/validation/
