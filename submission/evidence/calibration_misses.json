@@ -1,0 +1,18 @@
+{
+  "config_sha1": "c13639f15b3e11b51864b00c08b651167b0a68b8",
+  "missed_calibration_images": {
+    "DUP_IMAGE_NEAR": [
+      "calib_037",
+      "calib_038"
+    ],
+    "POSSIBLE_LOOSE_BOX": [
+      "calib_002",
+      "calib_006",
+      "calib_012",
+      "calib_024"
+    ],
+    "POSSIBLE_WRONG_CLASS": [
+      "calib_009"
+    ]
+  }
+}
