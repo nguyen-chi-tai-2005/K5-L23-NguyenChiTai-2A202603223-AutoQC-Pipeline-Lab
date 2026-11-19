@@ -84,3 +84,23 @@ Kiểm tra chỉ đọc đã tìm được các ví dụ để đối chiếu:
 Giai đoạn này chưa chạy calibration, chưa chọn hai ngưỡng,
 chưa sinh đầu ra chính thức vào `submission/`, chưa train hay hoàn thiện báo cáo.
 Test tích hợp chạy trong thư mục tạm, nên không thay thế `make run` của bước sau.
+
+## Cập nhật: calibration, pipeline và chuẩn bị Colab
+
+Sau giai đoạn triển khai đã chạy hai sweep và chọn phash_dist=4, conf=0.6.
+`make run PY=.venv/bin/python` nhận 205/224 ảnh, loại 19 ảnh; sau duyệt mô phỏng
+80 ảnh kết luận **Hold**, 0 ERROR, 38/205 ảnh còn cảnh báo chưa duyệt (18,54%).
+Export trong `submission/export/clean_v1/` là bản nháp để train.
+
+Đã chạy thử `--budget 0` vào thư mục riêng: Rework, mã 20, không export.
+Bằng chứng ở `submission/evidence/no_review/proof.json`.
+Độ nhạy intake được đo bằng `scripts/measure_intake_sensitivity.py`, chỉ đọc raw;
+kết quả không đồng nghĩa đã xác nhận FP/FN bằng mắt.
+
+`make check-core PY=.venv/bin/python`: **100 passed, 0 lỗi, 1 cảnh báo**
+(bỏ qua train). Kiểm tra bổ sung: 32 file bảo vệ và 1026 file data nguyên vẹn,
+mọi khóa cấu hình cố định giữ nguyên, 205 nhãn export khớp SHA1 trong manifest.
+
+Đã cập nhật `submission/REPORT.md` và thông tin học viên trên README.
+Notebook trỏ đúng repo, vẫn 20 epoch/2 seed; xem `docs/COLAB_RUN.md` để train
+sau khi push. Chưa có kết quả train hoặc xác nhận quan sát bằng mắt của học viên.
